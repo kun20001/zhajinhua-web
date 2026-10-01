@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#06120c">
+<title>炸金花 · 牌场风云</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="lobby" class="screen active">
+  <div class="inner">
+    <div class="lobby-top">
+      <div class="avatar-box" id="avatarBox">
+        <span>我</span>
+        <span class="frame-ring af_default" id="avatarFrame"></span>
+      </div>
+      <div class="wallet-row">
+        <div class="w-card"><div class="wc-label">💰 金币</div><div class="wc-val num" id="walletVal">5,000</div></div>
+        <div class="w-card"><div class="wc-label">💎 点券</div><div class="wc-val coupon num" id="couponVal">0</div></div>
+      </div>
+      <button class="mine-btn" id="mineBtn">
+        <div class="mine-progress" id="mineProgress"></div>
+        <span class="mine-icon">⛏️</span><span id="mineBtnTxt">挖煤</span>
+      </button>
+      <div class="tool-btns">
+        <button class="tool-btn" id="saveBtn">💾 存档</button>
+        <button class="tool-btn" id="orientationBtn">🔄 横屏</button>
+      </div>
+    </div>
+
+    <div class="lobby-tabs" id="lobbyTabs">
+      <button class="tab-btn active" data-tab="rooms">牌 场</button>
+      <button class="tab-btn" data-tab="shop">商 城</button>
+      <button class="tab-btn" data-tab="gacha">抽 卡</button>
+      <button class="tab-btn" data-tab="bag">背 包</button>
+      <button class="tab-btn" data-tab="dress">装 扮</button>
+      <button class="tab-btn" data-tab="loan" id="loanTabBtn">贷 款</button>
+      <button class="tab-btn plugin-tab" data-tab="plugins">🔌 插件</button>
+    </div>
+
+    <div class="tab-pane active scroll-y" id="tab-rooms">
+      <div class="section-title">选 择 牌 场</div>
+      <div class="room-grid" id="roomGrid"></div>
+    </div>
+
+    <div class="tab-pane scroll-y" id="tab-shop">
+      <div class="section-title">点 券 充 值</div>
+      <div class="recharge-banner">
+        <div class="rb-title">点 券 商 店</div>
+        <div class="rb-sub">模拟充值 · 点击档位直接获得点券，本页面不涉及任何真实支付</div>
+        <div class="recharge-grid" id="rechargeGrid"></div>
+      </div>
+      <div class="section-title">皮 肤 商 城</div>
+      <div class="grid-3" id="shopGrid"></div>
+    </div>
+
+    <div class="tab-pane scroll-y" id="tab-gacha">
+      <div class="gacha-banner">
+        <div class="gacha-title">星 河 祈 愿</div>
+        <div class="gacha-sub">消耗点券抽取稀有装扮 · 50抽内必得史诗 · 150抽内必得传说</div>
+        <div class="pity-row">
+          <div class="pity-pill"><div class="pl">小保底（史诗+）</div><div class="pv">还差 <b id="pitySmall">50</b> 抽</div></div>
+          <div class="pity-pill"><div class="pl">大保底（传说+）</div><div class="pv">还差 <b id="pityBig">150</b> 抽</div></div>
+          <div class="pity-pill"><div class="pl">累计抽数</div><div class="pv"><b id="pityTotal">0</b> 次</div></div>
+        </div>
+        <div class="gacha-btns">
+          <button class="gacha-btn" id="pull1Btn"><span>单 抽</span><span class="gb-cost">💎 150</span></button>
+          <button class="gacha-btn big" id="pull10Btn"><span>十 连 抽</span><span class="gb-cost">💎 1500</span></button>
+        </div>
+      </div>
+      <div class="section-title">奖 池 预 览</div>
+      <div class="pool-preview" id="poolPreview"></div>
+    </div>
+
+    <div class="tab-pane scroll-y" id="tab-bag">
+      <div class="section-title">我 的 背 包</div>
+      <div class="grid-3" id="bagGrid"></div>
+    </div>
+
+    <div class="tab-pane scroll-y" id="tab-dress">
+      <div class="section-title">当 前 装 扮</div>
+      <div id="dressList" style="display:flex;flex-direction:column;gap:9px"></div>
+    </div>
+
+    <div class="tab-pane scroll-y" id="tab-loan">
+      <div class="section-title">贷 款 中 心</div>
+      <div class="loan-warning">⚠️ <b>风险提示：</b>借款到期未还将自动扣款，扣款后金币可能变成负数。金币为负时无法进入任何牌场，只能通过挖煤还款。</div>
+      <div id="activeLoans" style="display:flex;flex-direction:column;gap:7px;margin-bottom:5px"></div>
+      <div class="section-title">可 选 贷 款</div>
+      <div class="grid-3" id="loanGrid"></div>
+    </div>
+
+    <div class="tab-pane scroll-y" id="tab-plugins">
+      <div class="section-title">插 件 管 理</div>
+      <div class="plugin-upload" id="pluginUpload">
+        <div class="pu-icon">📦</div>
+        <div class="pu-title">点击上传 .jjh 插件文件</div>
+        <div class="pu-sub">或拖拽文件到此处 · 插件后缀为 .jjh</div>
+      </div>
+      <input type="file" id="pluginFileInput" accept=".jjh,.js" style="display:none">
+      <div class="section-title">在 线 编 写</div>
+      <textarea class="plugin-code" id="pluginCode" placeholder="// 在此粘贴插件代码&#10;// 详见开发者文档"></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="modal-btn" style="margin-top:0" id="runPluginCode">▶ 运 行 代 码</button>
+        <button class="modal-btn sec" style="margin-top:0" id="showDocBtn">📖 开发文档</button>
+      </div>
+      <div class="section-title">已 安 装 插 件</div>
+      <div id="pluginList" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+</div>
+
+<div id="game" class="screen">
+  <div class="inner">
+    <div class="topbar">
+      <div class="room-badge" id="roomBadge">初级场</div>
+      <div class="stats">
+        <span>第 <b id="handNo" class="num">0</b> 局</span>
+        <span>底池 <b id="potVal" class="num">0</b></span>
+        <span>当前注 <b id="betVal" class="num">10</b></span>
+      </div>
+      <button class="mini-btn" id="leaveBtn">离开牌桌</button>
+    </div>
+    <div class="table">
+      <div class="ai-row" id="aiRow">
+        <div class="seat-wrap" data-pid="1"></div>
+        <div class="seat-wrap" data-pid="2"></div>
+        <div class="seat-wrap" data-pid="3"></div>
+      </div>
+      <div class="center-panel tb_default" id="centerPanel">
+        <div class="center-item"><div class="lbl">底 池</div><div class="val num" id="potBig">0</div></div>
+        <div class="center-item"><div class="lbl">当前注</div><div class="val small num" id="betBig">10</div></div>
+      </div>
+      <div id="meArea"><div class="seat-wrap" data-pid="0"></div></div>
+    </div>
+    <div class="controls" id="controls"></div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<div id="cheatFloat">
+  <div class="cf-head" id="cfHead">
+    <span class="cf-dot"></span>
+    <span class="cf-title">外 挂 控 制 台</span>
+    <button class="cf-min" id="cfMin">－</button>
+  </div>
+  <div class="cf-body">
+    <div class="cf-sec">视 野 类</div>
+    <div class="cf-item" data-toggle="seeAll"><div class="ci-label">👁 透视之眼<span class="ci-sub">看穿所有对手手牌</span></div><div class="switch" id="sw-seeAll"></div></div>
+    <div class="cf-item" data-toggle="showPower"><div class="ci-label">📊 牌力分析<span class="ci-sub">显示每家的牌力百分比</span></div><div class="switch" id="sw-showPower"></div></div>
+    <div class="cf-sec">金 钱 类</div>
+    <button class="cf-btn gold" id="cfMoney">💎 天降横财 +10,000</button>
+    <button class="cf-btn gold" id="cfCoupon">💠 点券暴富 +10,000</button>
+    <div class="cf-sec">牌 局 类</div>
+    <div class="cf-item" data-toggle="nextGodHand"><div class="ci-label">✨ 至尊手气<span class="ci-sub">下一局必定拿到豹子A</span></div><div class="switch" id="sw-nextGodHand"></div></div>
+    <button class="cf-btn" id="cfReroll">🔄 偷天换日 · 重铸本局手牌</button>
+    <div class="cf-item" data-toggle="godMode"><div class="ci-label">🛡 上帝模式<span class="ci-sub">比牌必定获胜</span></div><div class="switch" id="sw-godMode"></div></div>
+    <div class="cf-item" data-toggle="aiCripple"><div class="ci-label">💤 人机瘫痪<span class="ci-sub">AI 全部直接弃牌</span></div><div class="switch" id="sw-aiCripple"></div></div>
+    <div class="cf-sec">债 务 类</div>
+    <button class="cf-btn" id="cfClearDebt">🧾 一键清空所有债务</button>
+    <div class="cf-note">仅供单机娱乐 · 拖动标题栏移动</div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>

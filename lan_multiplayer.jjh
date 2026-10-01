@@ -1,0 +1,724 @@
+/* =========================================================
+   炸金花 · 局域网联机插件 v2.1（修复版）
+   4 座固定房间 · 房主控制 · 手动开始 · 无模态框比牌
+   ========================================================= */
+(function () {
+  'use strict';
+
+  const css = `
+  /* ===== 修复：模态框 z-index，必须放在最前 ===== */
+  body > .modal-mask { z-index: 100000 !important; }
+  body > .modal-mask .modal-box { position: relative; z-index: 1; }
+
+  .lan-wrap{display:flex;flex-direction:column;gap:10px;padding:4px}
+  .lan-card{background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(96,165,250,.35);border-radius:14px;padding:14px}
+  .lan-title{font-size:18px;font-weight:900;color:#93c5fd;margin-bottom:8px;letter-spacing:2px}
+  .lan-sub{font-size:12px;color:#8fa79a;line-height:1.6;margin-bottom:12px}
+  .lan-input{width:100%;padding:10px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.4);color:#e6f0e8;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box}
+  .lan-input:focus{border-color:#60a5fa}
+  .lan-input.err{border-color:#f87171}
+  .lan-btn{padding:10px 16px;border-radius:10px;border:1px solid rgba(96,165,250,.5);background:linear-gradient(180deg,rgba(96,165,250,.28),rgba(30,64,175,.22));color:#dbeafe;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
+  .lan-btn:hover{filter:brightness(1.25)}
+  .lan-btn:disabled{opacity:.4;cursor:not-allowed}
+  .lan-btn.gold{background:linear-gradient(180deg,rgba(240,194,87,.3),rgba(150,110,20,.25));border-color:rgba(240,194,87,.6);color:#ffe4a3}
+  .lan-btn.green{background:linear-gradient(180deg,rgba(46,158,91,.35),rgba(20,80,45,.28));border-color:rgba(70,201,122,.6);color:#b6f5c8}
+  .lan-btn.red{background:linear-gradient(180deg,rgba(220,50,50,.3),rgba(120,10,10,.25));border-color:rgba(220,50,50,.6);color:#fecaca}
+  .lan-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .lan-status{font-size:12px;padding:4px 10px;border-radius:20px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);color:#94a3b8}
+  .lan-status.on{color:#4ade80;border-color:rgba(74,222,128,.5)}
+  .lan-status.off{color:#f87171;border-color:rgba(248,113,113,.5)}
+  .lan-room-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:280px;overflow-y:auto}
+  .lan-room-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:10px;gap:10px}
+  .lan-room-item:hover{border-color:rgba(96,165,250,.5)}
+  .lan-room-id{font-family:Consolas,monospace;font-size:20px;font-weight:900;color:#facc15;letter-spacing:3px}
+  .lan-room-meta{font-size:11px;color:#8fa79a;margin-top:2px}
+  .lan-room-cfg{font-size:11px;color:#93c5fd}
+
+  .lan-full{position:fixed;inset:0;z-index:99990;background:radial-gradient(circle at 50% -10%,#0a2340 0%,#020610 70%);display:flex;flex-direction:column;padding:calc(8px + env(safe-area-inset-top,0px)) 10px calc(8px + env(safe-area-inset-bottom,0px));overflow:hidden}
+  .lan-head{display:flex;justify-content:space-between;align-items:center;gap:10px;background:rgba(0,0,0,.45);border:1px solid rgba(96,165,250,.3);border-radius:12px;padding:8px 12px;flex-shrink:0}
+  .lan-head .info{font-size:12px;color:#93c5fd;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .lan-head .info b{color:#facc15;font-size:13px}
+  .lan-leave{background:rgba(220,50,50,.25);border:1px solid rgba(220,50,50,.5);color:#fecaca;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  .lan-wait-room{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;margin-top:10px;overflow-y:auto}
+  .lan-seats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .lan-seat-slot{background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 8px;text-align:center;position:relative;min-height:110px;display:flex;flex-direction:column;justify-content:center;gap:6px}
+  .lan-seat-slot.empty{border-style:dashed;border-color:rgba(255,255,255,.15);opacity:.6}
+  .lan-seat-slot.host{border-color:#facc15;box-shadow:0 0 0 1px #facc15,0 0 14px rgba(250,204,21,.25)}
+  .lan-seat-slot.host::before{content:'房主';position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#facc15;color:#000;font-size:10px;font-weight:900;padding:2px 8px;border-radius:10px}
+  .lan-seat-slot .avatar{width:44px;height:44px;border-radius:50%;margin:0 auto;background:linear-gradient(135deg,#60a5fa,#2563eb);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#fff}
+  .lan-seat-slot.ai .avatar{background:linear-gradient(135deg,#a855f7,#6b21a8)}
+  .lan-seat-slot.empty .avatar{background:rgba(255,255,255,.08);color:#64748b;font-size:22px}
+  .lan-seat-slot .sn{font-size:13px;font-weight:800;color:#e6f0e8}
+  .lan-seat-slot .sc{font-size:10.5px;color:#8fa79a}
+  .lan-seat-slot .sbadge{font-size:9px;padding:1px 6px;border-radius:8px;display:inline-block;margin-top:2px}
+  .lan-seat-slot .sbadge.you{background:rgba(96,165,250,.25);color:#93c5fd}
+  .lan-seat-slot .sbadge.ai{background:rgba(168,85,247,.25);color:#d8b4fe}
+  .lan-seat-slot .sbadge.wait{background:rgba(255,255,255,.08);color:#94a3b8}
+
+  .lan-host-panel{background:rgba(0,0,0,.4);border:1px solid rgba(250,204,21,.35);border-radius:12px;padding:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
+  .lan-host-panel .lan-btn{padding:8px 14px;font-size:12.5px}
+  .lan-hint{font-size:12px;color:#93c5fd;text-align:center;padding:10px}
+
+  .lan-game-seats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;flex-shrink:0}
+  .lan-gseat{background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.1);border-radius:11px;padding:8px;display:flex;flex-direction:column;gap:5px;position:relative;transition:.2s}
+  .lan-gseat.active{border-color:#facc15;box-shadow:0 0 0 1px #facc15,0 0 16px rgba(250,204,21,.4)}
+  .lan-gseat.dim{opacity:.4;filter:grayscale(.6)}
+  .lan-gseat.me{background:linear-gradient(160deg,rgba(96,165,250,.15),rgba(255,255,255,.03));border-color:rgba(96,165,250,.4)}
+  .lan-gseat.empty{opacity:.35;border-style:dashed}
+  .lan-gseat.offline{border-color:#f87171;opacity:.6}
+  .lan-gseat-head{display:flex;justify-content:space-between;align-items:center;font-size:12px}
+  .lan-gseat-head .pn{font-weight:700;color:#dcefe2;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+  .lan-gseat-head .pc{color:#ffd76e;font-weight:700;font-size:11.5px}
+  .lan-tag{font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(96,165,250,.2);color:#93c5fd}
+  .lan-tag.ai{background:rgba(168,85,247,.25);color:#d8b4fe}
+  .lan-tag.you{background:rgba(250,204,21,.25);color:#fde047}
+  .lan-cards{display:flex;gap:3px;justify-content:center;min-height:52px;align-items:center}
+  .lan-card-face{width:34px;height:48px;border-radius:5px;background:#fcfcfc;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.5);font-size:13px;flex-shrink:0}
+  .lan-card-face.red{color:#d92b2b}
+  .lan-card-face.black{color:#1b1b1b}
+  .lan-card-face .r{line-height:1}
+  .lan-card-face .s{line-height:1;font-size:12px}
+  .lan-card-back{width:34px;height:48px;border-radius:5px;background:repeating-linear-gradient(45deg,#1b3a8f 0 4px,#2f5fd4 4px 8px);border:1px solid #0e2a66;position:relative;flex-shrink:0}
+  .lan-card-back::after{content:'';position:absolute;inset:3px;border:1px solid rgba(255,255,255,.25);border-radius:3px}
+  .lan-card-back.me-card{border-color:#facc15;box-shadow:0 0 0 1px #facc15,0 0 10px rgba(250,204,21,.55)}
+  .lan-card-empty{width:34px;height:48px;border-radius:5px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.12);flex-shrink:0}
+  .lan-gseat-foot{display:flex;justify-content:space-between;font-size:10px;color:#8fa79a}
+  .lan-gseat-foot .badge{padding:1px 6px;border-radius:10px;background:rgba(255,255,255,.08);font-weight:700}
+  .lan-gseat-foot .badge.blind{color:#9fb0ff;background:rgba(120,140,255,.2)}
+  .lan-gseat-foot .badge.look{color:#ffd76e;background:rgba(255,215,110,.18)}
+  .lan-gseat-foot .badge.fold{color:#8b9a90}
+  .lan-gseat-foot .badge.out{color:#ff8080;background:rgba(255,80,80,.2)}
+
+  .lan-center{margin-top:8px;padding:10px;background:radial-gradient(ellipse at center,rgba(22,74,47,.7),rgba(8,26,17,.5));border:1px solid rgba(96,165,250,.25);border-radius:14px;display:flex;justify-content:center;gap:32px;flex-shrink:0}
+  .lan-center .ci{text-align:center}
+  .lan-center .ci .l{font-size:10px;color:rgba(255,255,255,.55);letter-spacing:1.5px}
+  .lan-center .ci .v{font-size:22px;font-weight:900;color:#facc15;text-shadow:0 0 14px rgba(250,204,21,.4);margin-top:2px}
+  .lan-center .ci .v.sm{font-size:15px;color:#93c5fd;text-shadow:none}
+
+  .lan-controls{margin-top:8px;padding:8px;background:rgba(0,0,0,.4);border:1px solid rgba(96,165,250,.2);border-radius:12px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;min-height:52px;flex-shrink:0}
+  .lan-controls .btn{padding:8px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#e6f0e8;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:.12s}
+  .lan-controls .btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.18)}
+  .lan-controls .btn:disabled{opacity:.3;cursor:not-allowed}
+  .lan-controls .btn.gold{background:linear-gradient(180deg,#f0c257,#c08f22);color:#2a1e00;border-color:#f7dc92}
+  .lan-controls .btn.primary{background:linear-gradient(180deg,#2e9e5b,#1a6b3c);border-color:#46c97a}
+  .lan-controls .btn.warn{background:linear-gradient(180deg,#d98324,#a05a0e);border-color:#f0a848}
+  .lan-controls .btn.danger{background:linear-gradient(180deg,#b83a3a,#832020);border-color:#e06060}
+  .lan-controls .btn.compare{background:linear-gradient(180deg,#6a4fd6,#45309e);border-color:#9b86f0}
+  .lan-controls .hint{color:#7e968a;font-size:12.5px}
+  .lan-log{margin-top:8px;flex:1;min-height:0;overflow-y:auto;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.07);border-radius:11px;padding:8px 12px;font-size:11.5px;line-height:1.65;color:#9db3a6}
+
+  @media (orientation:landscape) and (max-height:540px){
+    .lan-game-seats{grid-template-columns:repeat(4,1fr)}
+    .lan-card-face,.lan-card-back,.lan-card-empty{width:26px;height:38px;font-size:11px}
+    .lan-center .ci .v{font-size:18px}
+    .lan-controls{padding:5px}
+    .lan-controls .btn{padding:6px 10px;font-size:11px}
+    .lan-log{display:none}
+    .lan-head{padding:5px 10px}
+    .lan-seats-grid{grid-template-columns:repeat(4,1fr)}
+    .lan-seat-slot{min-height:90px;padding:8px 6px}
+    .lan-seat-slot .avatar{width:36px;height:36px;font-size:16px}
+  }
+  `;
+
+  const styleEl = document.createElement('style');
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+
+  /* ============ 状态 ============ */
+  const state = {
+    ws: null,
+    connected: false,
+    connecting: false,
+    name: localStorage.getItem('lan_name') || '',
+    token: localStorage.getItem('lan_token') || '',
+    roomId: null,
+    playerId: null,
+    game: null,
+    logs: [],
+    roomList: [],
+    view: 'lobby',
+    heartbeatTimer: null,
+    reconnectTimer: null,
+    selectedRoomKey: 'king'
+  };
+
+  if (!state.token) {
+    state.token = 'tk_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('lan_token', state.token);
+  }
+
+const serverUrl = () => {
+    // 手动覆盖优先
+    const override = localStorage.getItem('ws_override');
+    if (override && override.trim()) return override.trim();
+
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const hostname = location.hostname;
+      // 判断是否局域网 IP（192.168.x.x / 10.x.x.x / 172.16-31.x.x / 127.x / localhost）
+      const isLAN = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.|localhost)/.test(hostname);
+      // 局域网 → 带 :3000 端口；公网域名 → 不带端口（走 443/80）
+      const port = isLAN ? ':3000' : '';
+      return proto + '//' + hostname + port;
+    }
+    return localStorage.getItem('lan_server') || 'ws://localhost:3000';
+  };
+
+  function validateName(name) {
+    if (!name) return '请输入名字';
+    if (!/^[\u4e00-\u9fa5]{2,6}$/.test(name)) return '名字必须为 2-6 个汉字（不能含符号）';
+    return null;
+  }
+
+  /* ============ WebSocket ============ */
+  function connect() {
+    if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) return;
+    state.connecting = true;
+    try {
+      state.ws = new WebSocket(serverUrl());
+    } catch (e) {
+      state.connecting = false;
+      return;
+    }
+    state.ws.onopen = () => {
+      state.connected = true;
+      state.connecting = false;
+      updateLobbyStatus('已连接', true);
+      if (state.name) send({ type: 'set_name', name: state.name });
+      if (state.roomId) {
+        send({ type: 'join_room', roomId: state.roomId, name: state.name, token: state.token });
+      }
+      if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
+      state.heartbeatTimer = setInterval(() => send({ type: 'ping' }), 20000);
+      send({ type: 'list_rooms' });
+    };
+    state.ws.onclose = () => {
+      state.connected = false;
+      state.connecting = false;
+      updateLobbyStatus('已断开', false);
+      if (state.heartbeatTimer) { clearInterval(state.heartbeatTimer); state.heartbeatTimer = null; }
+      if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = setTimeout(() => { if (!state.connected) connect(); }, 3000);
+    };
+    state.ws.onerror = () => {
+      state.connecting = false;
+      updateLobbyStatus('连接失败', false);
+    };
+    state.ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      handleServerMessage(msg);
+    };
+  }
+
+  function send(obj) {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify(obj));
+    }
+  }
+
+  function handleServerMessage(msg) {
+    switch (msg.type) {
+      case 'pong': break;
+      case 'name_ok':
+        state.name = msg.name;
+        localStorage.setItem('lan_name', msg.name);
+        renderAll();
+        break;
+      case 'error':
+        api.toast('⚠️ ' + msg.message);
+        break;
+      case 'rooms':
+        state.roomList = msg.rooms || [];
+        renderRoomList();
+        break;
+      case 'room_created':
+        state.roomId = msg.roomId;
+        state.playerId = msg.playerId;
+        state.view = 'room';
+        api.toast('🎉 房间已创建：' + msg.roomId);
+        renderAll();
+        break;
+      case 'joined':
+        state.roomId = msg.roomId;
+        state.playerId = msg.playerId;
+        state.view = 'room';
+        renderAll();
+        break;
+      case 'left':
+        state.roomId = null;
+        state.playerId = null;
+        state.game = null;
+        state.view = 'lobby';
+        renderAll();
+        break;
+      case 'room_destroyed':
+        api.toast('房间已解散');
+        state.roomId = null;
+        state.playerId = null;
+        state.game = null;
+        state.view = 'lobby';
+        renderAll();
+        break;
+      case 'state':
+        state.game = msg.game;
+        state.logs = msg.logs || [];
+        renderAll();
+        break;
+    }
+  }
+
+  /* ============ 渲染 ============ */
+  let paneEl = null;
+  let api = null;
+
+  function renderAll() {
+    if (!paneEl) return;
+    if (state.view === 'room' && state.game) {
+      renderRoom();
+    } else {
+      const old = document.getElementById('lanFull');
+      if (old) old.remove();
+      renderLobby();
+    }
+  }
+
+  function updateLobbyStatus(text, ok) {
+    const el = document.getElementById('lanStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'lan-status ' + (ok ? 'on' : 'off');
+  }
+
+  function renderLobby() {
+    const nameErr = validateName(state.name);
+    paneEl.innerHTML = `
+      <div class="lan-wrap">
+        <div class="lan-card">
+          <div class="lan-title">🌐 局域网联机</div>
+          <div class="lan-sub">
+            4 座固定房间 · 房主控制人机 · 手动开始游戏<br>
+            联机独立金币 · 外挂强制禁用 · 断线 30 秒自动离场
+          </div>
+          <div class="lan-row" style="margin-bottom:10px">
+            <div class="lan-status ${state.connected?'on':'off'}" id="lanStatus">${state.connected?'已连接':(state.connecting?'连接中…':'未连接')}</div>
+            <div class="lan-status">服务器：${serverUrl()}</div>
+            ${state.connected?'':`<button class="lan-btn" id="lanReconnect">重连</button>`}
+          </div>
+
+          <div style="font-size:13px;font-weight:700;color:#93c5fd;margin-bottom:6px">你的名字</div>
+          <input class="lan-input" id="lanNameInput" maxlength="6" placeholder="请输入 2-6 个汉字" value="${escapeHTML(state.name || '')}">
+          <div style="font-size:11px;color:${nameErr?'#f87171':'#7dffb0'};margin-top:6px;min-height:16px" id="lanNameHint">
+            ${nameErr ? '⚠️ ' + nameErr : (state.name ? '✓ 名字已保存' : '')}
+          </div>
+
+          <div style="font-size:13px;font-weight:700;color:#93c5fd;margin:12px 0 6px">选择牌场（创建时生效）</div>
+          <div class="lan-row" id="lanRoomKeyRow">
+            ${['novice','advanced','master','legend','king','god'].map(k => `
+              <button class="lan-btn ${state.selectedRoomKey===k?'gold':''}" data-key="${k}">${{novice:'🌱 初级',advanced:'⚔️ 高级',master:'🎯 大师',legend:'🔥 传奇',king:'👑 王者',god:'⚡ 神之'}[k]}</button>
+            `).join('')}
+          </div>
+
+          <div class="lan-row" style="margin-top:14px">
+            <button class="lan-btn gold" id="lanCreateBtn" ${(!state.connected||nameErr)?'disabled':''}>➕ 创建房间</button>
+            <input class="lan-input" id="lanJoinInput" maxlength="4" placeholder="4位房间号" style="flex:1;min-width:100px">
+            <button class="lan-btn" id="lanJoinBtn" ${(!state.connected||nameErr)?'disabled':''}>进入</button>
+          </div>
+        </div>
+
+        <div class="lan-card">
+          <div class="lan-title" style="font-size:15px">🏠 房间列表</div>
+          <div class="lan-row">
+            <button class="lan-btn" id="lanRefreshBtn">🔄 刷新</button>
+            <span style="font-size:11px;color:#8fa79a">每 5 秒自动刷新</span>
+          </div>
+          <div class="lan-room-list" id="lanRoomList"></div>
+        </div>
+      </div>
+    `;
+
+    const nameInput = document.getElementById('lanNameInput');
+    const hint = document.getElementById('lanNameHint');
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        state.name = nameInput.value.trim();
+        localStorage.setItem('lan_name', state.name);
+        const err = validateName(state.name);
+        nameInput.classList.toggle('err', !!err && state.name.length > 0);
+        hint.style.color = err ? '#f87171' : '#7dffb0';
+        hint.textContent = err ? '⚠️ ' + err : (state.name ? '✓ 名字已保存' : '');
+        const cb = document.getElementById('lanCreateBtn');
+        const jb = document.getElementById('lanJoinBtn');
+        if (cb) cb.disabled = !!err || !state.connected;
+        if (jb) jb.disabled = !!err || !state.connected;
+        if (state.connected && !err) send({ type: 'set_name', name: state.name });
+      });
+    }
+
+    document.getElementById('lanReconnect')?.addEventListener('click', connect);
+
+    document.getElementById('lanRoomKeyRow')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-key]');
+      if (!btn) return;
+      state.selectedRoomKey = btn.dataset.key;
+      renderLobby();
+    });
+
+    document.getElementById('lanCreateBtn')?.addEventListener('click', () => {
+      const err = validateName(state.name);
+      if (err) { api.toast('⚠️ ' + err); return; }
+      send({ type: 'set_name', name: state.name });
+      send({ type: 'create_room', roomKey: state.selectedRoomKey, token: state.token });
+    });
+
+    document.getElementById('lanJoinBtn')?.addEventListener('click', () => {
+      const err = validateName(state.name);
+      if (err) { api.toast('⚠️ ' + err); return; }
+      const rid = document.getElementById('lanJoinInput').value.trim();
+      if (!/^\d{4}$/.test(rid)) { api.toast('⚠️ 房间号必须是 4 位数字'); return; }
+      send({ type: 'set_name', name: state.name });
+      send({ type: 'join_room', roomId: rid, name: state.name, token: state.token });
+    });
+
+    document.getElementById('lanRefreshBtn')?.addEventListener('click', () => {
+      send({ type: 'list_rooms' });
+    });
+
+    renderRoomList();
+  }
+
+  function renderRoomList() {
+    const el = document.getElementById('lanRoomList');
+    if (!el) return;
+    const list = state.roomList || [];
+    if (list.length === 0) {
+      el.innerHTML = '<div style="text-align:center;color:#8fa79a;font-size:12px;padding:14px">暂无房间，创建一个试试吧</div>';
+      return;
+    }
+    const cfgNames = {novice:'初级场',advanced:'高级场',master:'大师场',legend:'传奇场',king:'王者场',god:'神之场'};
+    el.innerHTML = list.map(r => `
+      <div class="lan-room-item">
+        <div>
+          <div class="lan-room-id">${r.id}</div>
+          <div class="lan-room-meta">${r.humans} 真人 · ${r.total}/4 座 · ${r.phase==='lobby'?'等待中':(r.phase==='betting'?'游戏中':'结算中')}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="lan-room-cfg">${cfgNames[r.config.roomId] || r.config.roomId}</div>
+          <button class="lan-btn" data-join="${r.id}" style="margin-top:5px">加入</button>
+        </div>
+      </div>
+    `).join('');
+    el.querySelectorAll('[data-join]').forEach(btn => {
+      btn.onclick = () => {
+        const err = validateName(state.name);
+        if (err) { api.toast('⚠️ ' + err); return; }
+        send({ type: 'set_name', name: state.name });
+        send({ type: 'join_room', roomId: btn.dataset.join, name: state.name, token: state.token });
+      };
+    });
+  }
+
+  /* ---------- 房间/牌局 ---------- */
+  function renderRoom() {
+    const g = state.game;
+    if (!g) return;
+
+    const isHost = g.hostId === state.playerId;
+    const inGame = g.phase === 'betting' || g.phase === 'showdown';
+
+    let root = document.getElementById('lanFull');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'lanFull';
+      root.className = 'lan-full';
+      document.body.appendChild(root);
+    }
+
+    const cfg = g.roomCfg || { name: '王者场', baseBet: 1000, maxBet: 30000 };
+    const maxBetStr = (cfg.maxBet === 'Infinity' || !isFinite(cfg.maxBet)) ? '∞' : fmtNum(cfg.maxBet);
+
+    let bodyHTML = inGame ? renderGameBody(g, isHost) : renderWaitingBody(g, isHost);
+
+    root.innerHTML = `
+      <div class="lan-head">
+        <div class="info">
+          <span>🏠 <b>${g.roomId || state.roomId || '?'}</b></span>
+          <span>🎴 ${cfg.name || '?'}</span>
+          ${inGame ? `<span>第 <b>${g.handNo || 0}</b> 局</span><span>底注 <b>${fmtNum(cfg.baseBet)}</b></span><span>封顶 <b>${maxBetStr}</b></span>` : ''}
+          ${isHost ? '<span style="color:#facc15;font-weight:800">👑 你是房主</span>' : ''}
+        </div>
+        <div class="lan-row">
+          <span class="lan-status ${state.connected?'on':'off'}">${state.connected?'已连接':'断线中'}</span>
+          <button class="lan-leave" id="lanLeaveBtn">离开房间</button>
+        </div>
+      </div>
+      ${bodyHTML}
+    `;
+
+    root.querySelector('#lanLeaveBtn').onclick = () => {
+      if (confirm('确定离开房间？')) send({ type: 'leave_room' });
+    };
+
+    if (inGame) bindGameControls(root, g);
+    else bindWaitingControls(root, g, isHost);
+
+    const logEl = root.querySelector('#lanLog');
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function renderWaitingBody(g, isHost) {
+    const seats = g.seats;
+    const slotsHTML = seats.map((s, idx) => {
+      const isMe = s && s.id === state.playerId;
+      if (!s) {
+        return `
+          <div class="lan-seat-slot empty">
+            <div class="avatar">＋</div>
+            <div class="sn">空位</div>
+            <div class="sc">位置 ${idx + 1}</div>
+          </div>
+        `;
+      }
+      const cls = [];
+      if (s.isHost) cls.push('host');
+      if (s.isAI) cls.push('ai');
+      const tag = isMe ? '<span class="sbadge you">你</span>' : (s.isAI ? '<span class="sbadge ai">AI</span>' : '');
+      return `
+        <div class="lan-seat-slot ${cls.join(' ')}">
+          <div class="avatar">${s.isAI ? '🤖' : (s.name[0] || '?')}</div>
+          <div class="sn">${escapeHTML(s.name)}</div>
+          <div class="sc">💰 ${fmtNum(s.coins)}</div>
+          ${tag}
+        </div>
+      `;
+    }).join('');
+
+    const occupied = seats.filter(s => s).length;
+    const aiCount = seats.filter(s => s && s.isAI).length;
+    const humans = seats.filter(s => s && !s.isAI).length;
+
+    let hostPanel = '';
+    if (isHost) {
+      hostPanel = `
+        <div class="lan-host-panel">
+          <button class="lan-btn" id="lanAddAiBtn" ${occupied >= 4 ? 'disabled' : ''}>➕ 添加人机</button>
+          <button class="lan-btn red" id="lanRemoveAiBtn" ${aiCount === 0 ? 'disabled' : ''}>➖ 移除人机</button>
+          <button class="lan-btn green" id="lanStartBtn" ${occupied < 2 ? 'disabled' : ''}>▶ 开始游戏（${occupied}/4）</button>
+        </div>
+        <div style="font-size:11px;color:#8fa79a;text-align:center;margin-top:4px">
+          真人：${humans} · 人机：${aiCount} · 空位：${4 - occupied}
+        </div>
+      `;
+    } else {
+      hostPanel = `<div class="lan-hint">⏳ 等待房主开始游戏…（真人：${humans} · 人机：${aiCount} · 空位：${4 - occupied}）</div>`;
+    }
+
+    return `
+      <div class="lan-wait-room">
+        <div style="font-size:13px;color:#93c5fd;text-align:center;padding:6px">座位（4 座固定）</div>
+        <div class="lan-seats-grid">${slotsHTML}</div>
+        ${hostPanel}
+        <div class="lan-log" id="lanLog">${(state.logs||[]).slice(-50).map(l => `<div>${escapeHTML(l.msg || l)}</div>`).join('')}</div>
+      </div>
+    `;
+  }
+
+  function bindWaitingControls(root, g, isHost) {
+    if (!isHost) return;
+    root.querySelector('#lanAddAiBtn')?.addEventListener('click', () => send({ type: 'add_ai' }));
+    root.querySelector('#lanRemoveAiBtn')?.addEventListener('click', () => send({ type: 'remove_ai' }));
+    root.querySelector('#lanStartBtn')?.addEventListener('click', () => send({ type: 'start_game' }));
+  }
+
+  function renderGameBody(g) {
+    const me = g.players.find(p => p && p.id === state.playerId);
+    const mySeatIdx = me ? me.seatIdx : -1;
+    const others = [];
+    for (let i = 1; i < 4; i++) {
+      const idx = (mySeatIdx + i) % 4;
+      const p = g.players[idx];
+      if (p) others.push(p);
+    }
+
+    return `
+      <div class="lan-game-seats">
+        ${others.length ? others.map(p => gseatHTML(p, false)).join('') : '<div class="lan-hint" style="grid-column:1/-1">等待中…</div>'}
+      </div>
+      <div class="lan-center">
+        <div class="ci"><div class="l">底 池</div><div class="v">${fmtNum(g.pot || 0)}</div></div>
+        <div class="ci"><div class="l">当前注</div><div class="v sm">${fmtNum(g.bet || 0)}</div></div>
+      </div>
+      <div style="margin-top:8px">
+        ${me ? gseatHTML(me, true) : '<div class="lan-hint">正在同步…</div>'}
+      </div>
+      <div class="lan-controls" id="lanControls"></div>
+      <div class="lan-log" id="lanLog">${(state.logs||[]).slice(-50).map(l => `<div>${escapeHTML(l.msg || l)}</div>`).join('')}</div>
+    `;
+  }
+
+  function gseatHTML(p, isMeRow) {
+    const isMe = p.id === state.playerId;
+    const isTurn = state.game.turn === p.seatIdx && state.game.phase === 'betting';
+    const cls = ['lan-gseat'];
+    if (isTurn) cls.push('active');
+    if (isMe) cls.push('me');
+    if (p.folded || p.out) cls.push('dim');
+
+    let badge = '<span class="badge">—</span>';
+    if (p.out) badge = '<span class="badge out">出局</span>';
+    else if (p.folded) badge = '<span class="badge fold">弃牌</span>';
+    else if (p.looked) badge = '<span class="badge look">已看牌</span>';
+    else badge = '<span class="badge blind">闷牌</span>';
+
+    let cardsHTML = '';
+    if (p.cards && p.cards.length === 3) {
+      cardsHTML = p.cards.map(c => cardFace(c)).join('');
+    } else if (p.folded || p.out) {
+      cardsHTML = '<div class="lan-card-empty"></div>'.repeat(3);
+   } else {
+  const backCls = isMe ? 'lan-card-back me-card' : 'lan-card-back';
+  cardsHTML = `<div class="${backCls}"></div>`.repeat(3);
+}
+
+    const tags = [];
+    if (isMe) tags.push('<span class="lan-tag you">你</span>');
+    if (p.isAI) tags.push('<span class="lan-tag ai">AI</span>');
+
+    return `
+      <div class="${cls.join(' ')}" style="${isMeRow?'flex-direction:row;align-items:center;gap:10px;padding:10px 14px;width:100%':''}">
+        <div class="lan-gseat-head" style="${isMeRow?'flex-direction:column;align-items:flex-start;min-width:90px':''}">
+          <span class="pn">${escapeHTML(p.name)}${tags.join('')}</span>
+          <span class="pc">💰 ${fmtNum(p.coins)}</span>
+        </div>
+        <div class="lan-cards">${cardsHTML}</div>
+        <div class="lan-gseat-foot" style="${isMeRow?'flex-direction:column;align-items:flex-end;min-width:80px':''}">
+          ${badge}
+          <span>本局 ${fmtNum(p.betInHand || 0)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function cardFace(c) {
+    const red = c.s === 1 || c.s === 2;
+    const rank = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'}[c.r];
+    const suit = ['♠','♥','♦','♣'][c.s];
+    return `<div class="lan-card-face ${red?'red':'black'}"><span class="r">${rank}</span><span class="s">${suit}</span></div>`;
+  }
+
+  /* ===== 修复：比牌直接展开为每个对手一个按钮，不用模态框 ===== */
+  function bindGameControls(root, g) {
+    const el = root.querySelector('#lanControls');
+    if (!el) return;
+
+    const me = g.players.find(p => p && p.id === state.playerId);
+    if (!me) { el.innerHTML = '<div class="hint">正在同步身份…</div>'; return; }
+
+    if (g.phase === 'showdown') { el.innerHTML = '<div class="hint">摊牌结算中…</div>'; return; }
+    if (g.phase !== 'betting') { el.innerHTML = '<div class="hint">等待中…</div>'; return; }
+
+    const isMyTurn = g.turn === me.seatIdx;
+    if (!isMyTurn) {
+      const cur = g.players.find(p => p && p.seatIdx === g.turn);
+      el.innerHTML = `<div class="hint">${cur ? escapeHTML(cur.name) : '?'} 思考中…</div>`;
+      return;
+    }
+    if (me.folded || me.out) { el.innerHTML = '<div class="hint">你已弃牌</div>'; return; }
+
+    const cfg = g.roomCfg || {};
+    const toCall = me.looked ? (g.bet * 2) : g.bet;
+    const canCall = me.coins >= toCall;
+    const maxBet = (cfg.maxBet === 'Infinity' || !isFinite(cfg.maxBet)) ? 1e15 : cfg.maxBet;
+
+    let html = '';
+    if (!me.looked) html += `<button class="btn gold" data-a="look">👁 看牌</button>`;
+    html += `<button class="btn danger" data-a="fold">弃牌</button>`;
+    html += `<button class="btn primary" data-a="call" ${canCall?'':'disabled'}>跟注 ${fmtNum(toCall)}</button>`;
+
+    [2,3,5].forEach(m => {
+      const t = g.bet * m;
+      if (t <= maxBet && t > g.bet) {
+        const need = me.looked ? t*2 : t;
+        const ok = me.coins >= need;
+        html += `<button class="btn warn" data-a="raise" data-to="${t}" ${ok?'':'disabled'}>加到 ${fmtNum(t)}</button>`;
+      }
+    });
+
+    /* 比牌：直接展开为每个对手一个按钮 */
+    if (g.actionsThisHand > 4 && canCall) {
+      const others = g.players.filter(p => p && !p.folded && !p.out && p.id !== me.id);
+      others.forEach(o => {
+        html += `<button class="btn compare" data-a="compare-direct" data-tid="${o.id}">⚔ 与 ${escapeHTML(o.name)} 比</button>`;
+      });
+    }
+
+    el.innerHTML = html;
+
+    el.querySelectorAll('[data-a]').forEach(btn => {
+      btn.onclick = () => {
+        const a = btn.dataset.a;
+        console.log('[联机] 点击按钮:', a, btn.dataset);
+        if (a === 'look') send({ type:'action', action:{ action:'look' } });
+        else if (a === 'fold') send({ type:'action', action:{ action:'fold' } });
+        else if (a === 'call') send({ type:'action', action:{ action:'call' } });
+        else if (a === 'raise') send({ type:'action', action:{ action:'raise', to: parseInt(btn.dataset.to, 10) } });
+        else if (a === 'compare-direct') {
+          const tid = btn.dataset.tid;
+          console.log('[联机] 发起比牌，目标:', tid);
+          send({ type:'action', action:{ action:'compare', targetId: tid } });
+        }
+      };
+    });
+  }
+
+  function fmtNum(n) {
+    if (n == null || !isFinite(n)) return '∞';
+    const v = Math.round(n);
+    if (Math.abs(v) >= 1e12) return (v/1e12).toFixed(2) + 'T';
+    if (Math.abs(v) >= 1e9) return (v/1e9).toFixed(2) + 'B';
+    if (Math.abs(v) >= 1e6) return (v/1e6).toFixed(2) + 'M';
+    return v.toLocaleString('en-US');
+  }
+
+  function escapeHTML(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function hideCheatFloat() {
+    const el = document.getElementById('cheatFloat');
+    if (el) el.style.display = 'none';
+    try {
+      if (window.cheats) Object.keys(window.cheats).forEach(k => window.cheats[k] = false);
+    } catch(e){}
+  }
+
+  /* ============ 注册 ============ */
+  window.JJH.registerPlugin({
+    id: 'lan_multiplayer',
+    name: '局域网联机',
+    version: '2.1.0',
+    author: '官方',
+    description: '4 座固定房间 · 房主控制 · 手动开始 · 无模态框比牌',
+    icon: '🌐'
+  }, function (pluginAPI) {
+    api = pluginAPI;
+
+    hideCheatFloat();
+    const obs = new MutationObserver(() => hideCheatFloat());
+    obs.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(() => connect(), 300);
+
+    setInterval(() => {
+      if (state.connected && state.view === 'lobby') send({ type: 'list_rooms' });
+    }, 5000);
+
+    api.addTab('lan', '联机', function (pane) {
+      paneEl = pane;
+      renderAll();
+    }, '🌐');
+  });
+
+})();
